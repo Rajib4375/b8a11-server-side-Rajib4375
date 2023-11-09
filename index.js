@@ -30,6 +30,16 @@ async function run() {
 
   const jobsCollection = client.db('careerHub').collection('jobs');
 
+
+  app.get('/jobs/:job_category', async(req, res)=>{
+    const jobCategory = req.params.job_category;
+    const coursor = jobsCollection.find({job_category:jobCategory});
+    const result = await coursor.toArray();
+    res.send(result)
+
+  })
+
+
   app.get('/jobs', async(req,res)=>{
     const coursor = jobsCollection.find();
     const result = await coursor.toArray();
