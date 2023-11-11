@@ -30,6 +30,8 @@ async function run() {
 
   const jobsCollection = client.db('careerHub').collection('jobs');
 
+  const jobApplyCollection = client.db('careerHub').collection('jobApplyed')
+
 
   app.get('/jobs/:job_category', async(req, res)=>{
     const jobCategory = req.params.job_category;
@@ -52,6 +54,14 @@ async function run() {
    const result = await jobsCollection.insertOne(newJobs);
    res.send(result);
 
+  })
+
+  // job apply
+  app.post('/jobApplyed', async(req, res)=>{
+     const jobApply = req.body;
+     console.log(jobApply)
+     const result = await jobApplyCollection.insertOne(jobApply);
+     res.send(result)
   })
 
     // Send a ping to confirm a successful connection
