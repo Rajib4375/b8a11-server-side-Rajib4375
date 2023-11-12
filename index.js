@@ -113,6 +113,25 @@ app.post('/jwt', logger, async(req, res)=>{
    res.send(result);
 
   });
+  app.put('/jobs/:id', async(req, res)=>{
+    const id = req.params.id;
+    const filter = {_id: new ObjectId(id)}
+    const options = {upsert: true}
+    const updatedJob = req.body;
+    const Job = {
+      $set:{
+        company_name: updatedJob.company_name,
+         job_title: updatedJob.job_title, 
+         job_category: updatedJob.job_category,
+          job_posting_date: updatedJob.job_posting_date,
+           application_deadline: updatedJob.application_deadline,
+           compony_logo: updatedJob.compony_logo,
+            salary_range: updatedJob.salary_range
+      }
+    }
+     const result = await jobsCollection.updateOne(filter, Job, options);
+     res.send(result);
+  })
 
   app.delete('/jobs/:id', async(req, res)=>{
     const id = req.params.id;
