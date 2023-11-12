@@ -1,13 +1,19 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const cookieParser =require('cookie-parser');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 const app = express();
 const port = process.env.PORT || 5000;
 
 // middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:5173'],
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser())
 
 
 console.log(process.env.DB_PASS)
@@ -23,16 +29,59 @@ const client = new MongoClient(uri, {
   }
 });
 
+  // middleware
+  const logger = async(req, res, next)=>{
+    console.log('called:', req.host, req.originalUrl)
+    next();
+    
+  }
+  const verifyToken = async(req, res, next) =>{
+    const token = req.cookies?.token;
+    console.log('value of token middleware', token)
+    if(!token){
+      return res.status(401).send({message:'not authorized'})
+    }
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded)=>{
+      // error
+       if(err){
+        console.log(err)
+        return res.status(401).send({message : 'unauthorized'})
+       }
+      // decoded
+      console.log('value in the token', decoded)
+      req.user = decoded;
+      next()
+    })
+   
+  }
+
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
-
+  
   const jobsCollection = client.db('careerHub').collection('jobs');
 
-  const jobApplyCollection = client.db('careerHub').collection('jobApplyed')
+  const jobApplyCollection = client.db('careerHub').collection('jobApplyed');
 
 
+// auth related Api
+app.post('/jwt', logger, async(req, res)=>{
+  const user = req.body;
+  console.log(user);
+  const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {expiresIn: '1h'})
+  res
+  .cookie('token', token, {
+    httpOnly:true,
+    secure: process.env.ACCESS_TOKEN_SECRET === 'production',
+    sameSite: process.env.ACCESS_TOKEN_SECRET === 'production'? 'none' :'strict'
+  })
+  .send({success: true})
+})
+
+
+// jobs related api
   app.get('/jobs/:job_category', async(req, res)=>{
     const jobCategory = req.params.job_category;
     const coursor = jobsCollection.find({job_category:jobCategory});
@@ -42,19 +91,19 @@ async function run() {
   })
 
 
-  app.get('/jobs', async(req,res)=>{
+  app.get('/jobs', logger,  async(req,res)=>{
     const coursor = jobsCollection.find();
     const result = await coursor.toArray();
     res.send(result)
   })
 
-
-  app.get('/details/:id', async(req, res)=>{
-    const id = req.params.id;
-    const query = {_id: new ObjectId(id)}
-    const result = await jobsCollection.findOne(query);
-    res.send(result)
-  })
+ app.get('/job/:id', async(req, res)=>{
+  const id = req.params.id;
+  const query = {_id: new ObjectId(id)}
+  const result = await jobsCollection.findOne(query);
+  res.send(result)
+ })
+ 
 
 
   app.post('/jobs', async(req, res)=>{
@@ -63,12 +112,24 @@ async function run() {
    const result = await jobsCollection.insertOne(newJobs);
    res.send(result);
 
+  });
+
+  app.delete('/jobs/:id', async(req, res)=>{
+    const id = req.params.id;
+    const query = {_id: new ObjectId(id)}
+    const result = await jobsCollection.deleteOne(query);
+    res.send(result);
   })
 
   // job apply
 
-  app.get('/jobApplyed', async(req, res)=>{
+  app.get('/jobApplyed', logger, verifyToken, async(req, res)=>{
     console.log(req.query.email);
+    // console.log('token', req.cookies.token)
+    console.log('valid token', req.user)
+    if(req.query.email !== req.user.email){
+      return res.status(403).send({message: 'forbidden access'})
+    }
     let query ={};
     if(req.query?.email){
       query={email: req.query.email}
@@ -80,7 +141,7 @@ async function run() {
 
 
 
-  app.post('/jobApplyed', async(req, res)=>{
+  app.post('/jobApplyed', verifyToken, async(req, res)=>{
      const jobApply = req.body;
      console.log(jobApply)
      const result = await jobApplyCollection.insertOne(jobApply);
